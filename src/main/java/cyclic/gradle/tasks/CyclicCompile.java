@@ -4,7 +4,8 @@ import org.gradle.api.GradleException;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.internal.file.temp.TemporaryFileProvider;
 import org.gradle.api.internal.tasks.compile.CompilationFailedException;
-import org.gradle.api.tasks.*;
+import org.gradle.api.tasks.InputDirectory;
+import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.compile.AbstractCompile;
 import org.gradle.internal.jvm.Jvm;
 import org.gradle.process.internal.JavaExecHandleBuilder;
@@ -59,7 +60,7 @@ public class CyclicCompile extends AbstractCompile{
 				output: "%s"
 				
 				""".formatted(srcDir.replace("\\", "/"), outDir.replace("\\", "/")));
-		/*if(jarDeps.size() > 0){
+		if(jarDeps.size() > 0){
 			projectText.append("dependencies:\n");
 			// bleh
 			for(String dep : jarDeps)
@@ -68,7 +69,12 @@ public class CyclicCompile extends AbstractCompile{
 							 - type: "jar"
 							   location: "%s"
 							""".formatted(dep.replace("\\", "/")));
-		}*/
+				else
+					projectText.append("""
+							 - type: "classFolder"
+							   location: "%s"
+							""".formatted(dep.replace("\\", "/")));
+		}
 		
 		File projectFile = tmps.createTemporaryFile("project", ".cyc.yaml");
 		Files.writeString(projectFile.toPath(), projectText.toString(), StandardOpenOption.WRITE);
