@@ -2,7 +2,6 @@ package cyclic.gradle.tasks;
 
 import org.gradle.api.GradleException;
 import org.gradle.api.file.FileCollection;
-import org.gradle.api.internal.file.temp.TemporaryFileProvider;
 import org.gradle.api.internal.tasks.compile.CompilationFailedException;
 import org.gradle.api.tasks.InputDirectory;
 import org.gradle.api.tasks.TaskAction;
@@ -21,7 +20,6 @@ import java.util.jar.JarFile;
 public class CyclicCompile extends AbstractCompile{
 	
 	private final ExecOperations execOps;
-	private final TemporaryFileProvider tmps;
 	
 	// this feels gross, but gradle operates on the file level, while the compiler (currently) only operates on the folder level
 	private File src = null;
@@ -29,9 +27,8 @@ public class CyclicCompile extends AbstractCompile{
 	public FileCollection compilerCp = null;
 	
 	@Inject
-	public CyclicCompile(ExecOperations execOps, TemporaryFileProvider tmps){
+	public CyclicCompile(ExecOperations execOps){
 		this.execOps = execOps;
-		this.tmps = tmps;
 	}
 	
 	@TaskAction
@@ -75,8 +72,8 @@ public class CyclicCompile extends AbstractCompile{
 							""".formatted(dep.replace("\\", "/")));
 		}
 		
-		File projectFile = tmps.createTemporaryFile("project", ".cyc.yaml");
-		Files.writeString(projectFile.toPath(), projectText.toString(), StandardOpenOption.WRITE);
+		File projectFile = new File(getTemporaryDir(), "gradle_project.cyc.yaml");
+		Files.writeString(projectFile.toPath(), projectText.toString(), StandardOpenOption.CREATE);
 		
 		try{
 			var result = execOps.javaexec(spec -> {
