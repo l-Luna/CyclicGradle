@@ -2,7 +2,6 @@ package cyclic.gradle.tasks;
 
 import org.gradle.api.GradleException;
 import org.gradle.api.file.FileCollection;
-import org.gradle.api.internal.tasks.compile.CompilationFailedException;
 import org.gradle.api.tasks.InputDirectory;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.compile.AbstractCompile;
@@ -81,10 +80,11 @@ public class CyclicCompile extends AbstractCompile{
 				spec.setClasspath(compilerCp);
 				spec.setArgs(List.of("-p", projectFile.getAbsolutePath()));
 				spec.setJvmArgs(List.of("--enable-preview"));
+				spec.setIgnoreExitValue(true); // we'll handle it
 			});
 			
 			if(result.getExitValue() != 0)
-				throw new CompilationFailedException(result.getExitValue());
+				throw new CycCompilationFailedException(result.getExitValue());
 		}finally{
 			projectFile.delete();
 		}
@@ -97,5 +97,13 @@ public class CyclicCompile extends AbstractCompile{
 	
 	public void setSrc(File src){
 		this.src = src;
+	}
+	
+	// Identical to the (internal) CompilationFailedException
+	public static class CycCompilationFailedException extends RuntimeException{
+		
+		public CycCompilationFailedException(int exitCode){
+			super(String.format("Compilation failed with exit code %d; see the compiler error output for details.", exitCode));
+		}
 	}
 }
