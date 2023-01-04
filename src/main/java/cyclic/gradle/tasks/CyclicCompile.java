@@ -8,8 +8,7 @@ import org.gradle.api.tasks.InputDirectory;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.compile.AbstractCompile;
 import org.gradle.internal.jvm.Jvm;
-import org.gradle.process.internal.JavaExecHandleBuilder;
-import org.gradle.process.internal.JavaExecHandleFactory;
+import org.gradle.process.ExecOperations;
 
 import javax.inject.Inject;
 import java.io.File;
@@ -21,7 +20,7 @@ import java.util.jar.JarFile;
 
 public class CyclicCompile extends AbstractCompile{
 	
-	private final JavaExecHandleFactory handles;
+	private final ExecOperations execOps;
 	private final TemporaryFileProvider tmps;
 	
 	// this feels gross, but gradle operates on the file level, while the compiler (currently) only operates on the folder level
@@ -30,8 +29,8 @@ public class CyclicCompile extends AbstractCompile{
 	public FileCollection compilerCp = null;
 	
 	@Inject
-	public CyclicCompile(JavaExecHandleFactory handles, TemporaryFileProvider tmps){
-		this.handles = handles;
+	public CyclicCompile(ExecOperations execOps, TemporaryFileProvider tmps){
+		this.execOps = execOps;
 		this.tmps = tmps;
 	}
 	
@@ -80,13 +79,13 @@ public class CyclicCompile extends AbstractCompile{
 		Files.writeString(projectFile.toPath(), projectText.toString(), StandardOpenOption.WRITE);
 		
 		try{
-			JavaExecHandleBuilder handle = handles.newJavaExec();
-			handle.setExecutable(Jvm.current().getJavaExecutable());
-			handle.setClasspath(compilerCp);
-			handle.setArgs(List.of("-p", projectFile.getAbsolutePath()));
-			handle.setJvmArgs(List.of("--enable-preview"));
+			var result = execOps.javaexec(spec -> {
+				spec.setExecutable(Jvm.current().getJavaExecutable());
+				spec.setClasspath(compilerCp);
+				spec.setArgs(List.of("-p", projectFile.getAbsolutePath()));
+				spec.setJvmArgs(List.of("--enable-preview"));
+			});
 			
-			var result = handle.build().start().waitForFinish();
 			if(result.getExitValue() != 0)
 				throw new CompilationFailedException(result.getExitValue());
 		}finally{
