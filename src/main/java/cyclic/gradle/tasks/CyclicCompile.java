@@ -2,10 +2,16 @@ package cyclic.gradle.tasks;
 
 import org.gradle.api.GradleException;
 import org.gradle.api.file.FileCollection;
+import org.gradle.api.plugins.JavaPluginExtension;
+import org.gradle.api.provider.Property;
 import org.gradle.api.tasks.InputDirectory;
+import org.gradle.api.tasks.Nested;
+import org.gradle.api.tasks.Optional;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.compile.AbstractCompile;
 import org.gradle.internal.jvm.Jvm;
+import org.gradle.jvm.toolchain.JavaLauncher;
+import org.gradle.jvm.toolchain.JavaToolchainService;
 import org.gradle.process.ExecOperations;
 
 import javax.inject.Inject;
@@ -19,8 +25,10 @@ import java.util.jar.JarFile;
 public class CyclicCompile extends AbstractCompile{
 	
 	private final ExecOperations execOps;
+	private final Property<JavaLauncher> javaLauncher;
 	
-	// this feels gross, but gradle operates on the file level, while the compiler (currently) only operates on the folder level
+	// this feels gross, but gradle operates on the file level(?),
+	// while the compiler (currently) only operates on the folder level
 	private File src = null;
 	
 	public FileCollection compilerCp = null;
@@ -28,6 +36,14 @@ public class CyclicCompile extends AbstractCompile{
 	@Inject
 	public CyclicCompile(ExecOperations execOps){
 		this.execOps = execOps;
+		
+		javaLauncher = getProject().getObjects().property(JavaLauncher.class);
+		javaLauncher.finalizeValueOnRead();
+		
+		// set up the default java version based on project setup (but still allow modifying explicitly)
+		var toolchain = getProject().getExtensions().getByType(JavaPluginExtension.class).getToolchain();
+		var service = getProject().getExtensions().getByType(JavaToolchainService.class);
+		javaLauncher.convention(service.launcherFor(toolchain));
 	}
 	
 	@TaskAction
@@ -76,7 +92,10 @@ public class CyclicCompile extends AbstractCompile{
 		
 		try{
 			var result = execOps.javaexec(spec -> {
-				spec.setExecutable(Jvm.current().getJavaExecutable());
+				if(javaLauncher.isPresent())
+					spec.setExecutable(javaLauncher.get().getExecutablePath());
+				else
+					spec.setExecutable(Jvm.current().getJavaExecutable().getAbsolutePath());
 				spec.setClasspath(compilerCp);
 				spec.setArgs(List.of("-p", projectFile.getAbsolutePath()));
 				spec.setJvmArgs(List.of("--enable-preview"));
@@ -86,6 +105,7 @@ public class CyclicCompile extends AbstractCompile{
 			if(result.getExitValue() != 0)
 				throw new CycCompilationFailedException(result.getExitValue());
 		}finally{
+			//noinspection ResultOfMethodCallIgnored
 			projectFile.delete();
 		}
 	}
@@ -97,6 +117,12 @@ public class CyclicCompile extends AbstractCompile{
 	
 	public void setSrc(File src){
 		this.src = src;
+	}
+	
+	@Nested
+	@Optional
+	public Property<JavaLauncher> getJavaLauncher(){
+		return javaLauncher;
 	}
 	
 	// Identical to the (internal) CompilationFailedException
